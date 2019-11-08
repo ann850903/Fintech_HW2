@@ -10,6 +10,8 @@ from keras.utils import to_categorical
 from keras.callbacks import EarlyStopping, CSVLogger
 #from keras.wrappers.scikit_learn import KerasClassifier
 #from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import confusion_matrix, recall_score, precision_score, f1_score
+from sklearn.utils.multiclass import unique_labels
 
 lr = 0.01
 batch_size = 32
@@ -19,6 +21,7 @@ validation_split = 0.2
 
 training_filename = 'Data.csv'
 hidden_test_set_filename = 'test_no_Class.csv'
+output_filename = 'r07943097_answer.txt'
 
 def load_data(file):
     df = pd.read_csv(file)
@@ -66,8 +69,59 @@ def plot_loss_accuracy(file):
     val_accuracy, = plt.plot(val_accuracy)
     plt.legend([accuracy, val_accuracy], ['accuracy', 'val_accuracy'], loc='lower right')
     plt.show()
-    
-    
+
+def plot_confusion_matrix(y_true, y_pred, classes,
+                          normalize=False,
+                          title=None,
+                          cmap=plt.cm.Blues):
+    """
+    This function prints and plots the confusion matrix.
+    Normalization can be applied by setting `normalize=True`.
+    """
+    if not title:
+        if normalize:
+            title = 'Normalized confusion matrix'
+        else:
+            title = 'Confusion matrix, without normalization'
+
+    # Compute confusion matrix
+    cm = confusion_matrix(y_true, y_pred)
+    # Only use the labels that appear in the data
+    classes = classes[unique_labels(y_true, y_pred)]
+    if normalize:
+        cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+        print("Normalized confusion matrix")
+    else:
+        print('Confusion matrix, without normalization')
+
+    print(cm)
+
+    fig, ax = plt.subplots()
+    im = ax.imshow(cm, interpolation='nearest', cmap=cmap)
+    ax.figure.colorbar(im, ax=ax)
+    # We want to show all ticks...
+    ax.set(xticks=np.arange(cm.shape[1]),
+           yticks=np.arange(cm.shape[0]),
+           # ... and label them with the respective list entries
+           xticklabels=classes, yticklabels=classes,
+           title=title,
+           ylabel='True',
+           xlabel='Predict')
+
+    # Rotate the tick labels and set their alignment.
+    plt.setp(ax.get_xticklabels(), rotation=0, ha="right",
+             rotation_mode="anchor")
+
+    # Loop over data dimensions and create text annotations.
+    fmt = '.2f' if normalize else 'd'
+    thresh = cm.max() / 2.
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            ax.text(j, i, format(cm[i, j], fmt),
+                    ha="center", va="center",
+                    color="white" if cm[i, j] > thresh else "black")
+    fig.tight_layout()
+    return ax
 
 ### load training file
 x_train, y_train = load_data(training_filename)
@@ -126,5 +180,47 @@ score = model.evaluate(x_test, y_test)
 print('Test loss:', score[0])
 print('Test accuracy:', score[1])
 
+### load hidden test set file
+x_hidden = load_data(hidden_test_set_filename)
 
+### predict hidden test set
+y_pred_hidden = np.argmax(model.predict(x_hidden), axis=1)
+
+### output my answer
+with open(output_filename, 'w') as fo: 
+    for predict in y_pred_hidden:
+        fo.write(str(predict) + "\n")
+
+### plot_confusion_matrix and calculate precision, recall, f1_score
+#### training set
+y_true = np.argmax(y_train, axis=1)
+y_pred = np.argmax(model.predict(x_train), axis=1)
+#plot_confusion_matrix(y_true, y_pred, classes=np.arange(num_classes),
+#                      title='train_confusion_matrix')
+
+train_precision = precision_score(y_true, y_pred)
+print('train_precision:', train_precision)
+train_recall = recall_score(y_true, y_pred)
+print('train_recall:', train_recall)
+train_f1_score = f1_score(y_true, y_pred)
+print('train_f1_score:', train_f1_score)
+
+#### validation set
+y_true = np.argmax(y_test, axis=1)
+y_pred = np.argmax(model.predict(x_test), axis=1)
+#plot_confusion_matrix(y_true, y_pred, classes=np.arange(num_classes),
+#                      title='validation_confusion_matrix')
+#plt.show()
+
+test_precision = precision_score(y_true, y_pred)
+print('test_precision:', test_precision)
+test_recall = recall_score(y_true, y_pred)
+print('test_recall:', test_recall)
+test_f1_score = f1_score(y_true, y_pred)
+print('test_f1_score:', test_f1_score)
+
+#### average score
+print('average_precision:', (train_precision+test_precision)/2)
+print('average_recall:', (train_recall+test_recall)/2)
+print('average_f1_score:', (train_f1_score+test_f1_score)/2)
 
